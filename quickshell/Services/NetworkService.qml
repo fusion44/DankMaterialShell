@@ -13,6 +13,10 @@ Singleton {
     property string backend: activeService?.backend ?? ""
     property string networkStatus: activeService?.networkStatus ?? "disconnected"
     property string primaryConnection: activeService?.primaryConnection ?? ""
+    property int connectivityState: activeService?.connectivityState ?? 0
+    property bool isPortal: activeService?.isPortal ?? false
+    readonly property string portalProbeUrl: "http://neverssl.com"
+    readonly property string portalSSID: plainDisplayText(currentWifiSSID)
 
     property string ethernetIP: activeService?.ethernetIP ?? ""
     property string ethernetInterface: activeService?.ethernetInterface ?? ""
@@ -187,6 +191,44 @@ Singleton {
         if (activeService && activeService.getState) {
             activeService.getState();
         }
+    }
+
+    function openCaptivePortal() {
+        if (!isPortal)
+            return;
+        Quickshell.execDetached(["xdg-open", portalProbeUrl]);
+    }
+
+    function plainDisplayText(text) {
+        return String(text || "").replace(/[<>&\[\]()*_`~#:\\]/g, character => {
+            if (character === "<")
+                return "‹";
+            if (character === ">")
+                return "›";
+            if (character === "&")
+                return "＆";
+            if (character === "[")
+                return "［";
+            if (character === "]")
+                return "］";
+            if (character === "(")
+                return "（";
+            if (character === ")")
+                return "）";
+            if (character === "*")
+                return "＊";
+            if (character === "_")
+                return "＿";
+            if (character === "`")
+                return "｀";
+            if (character === "~")
+                return "～";
+            if (character === "#")
+                return "＃";
+            if (character === ":")
+                return "꞉";
+            return "＼";
+        }).replace(/[\u0000-\u001f\u007f-\u009f]/g, " ");
     }
 
     function scanWifi() {

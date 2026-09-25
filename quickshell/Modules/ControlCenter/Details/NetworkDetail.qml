@@ -1041,13 +1041,87 @@ Rectangle {
     }
 
     Item {
-        id: wifiScanningOverlay
+        id: portalRow
         anchors.top: hotspotRow.visible ? hotspotRow.bottom : headerRow.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.margins: Theme.spacingM
+        anchors.topMargin: hotspotRow.visible ? Theme.spacingS : Theme.spacingM
+        visible: currentConnectionType === "wifi" && NetworkService.wifiEnabled && NetworkService.isPortal
+        height: visible ? 56 : 0
+
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.cornerRadius
+            color: portalMouseArea.containsMouse ? Theme.primaryHoverLight : Theme.surfaceLight
+            border.color: Theme.warning
+            border.width: 1
+
+            Row {
+                anchors.left: parent.left
+                anchors.leftMargin: Theme.spacingM
+                anchors.right: portalChevron.left
+                anchors.rightMargin: Theme.spacingS
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.spacingS
+
+                DankIcon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "warning"
+                    size: Theme.iconSize - 4
+                    color: Theme.warning
+                }
+
+                Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - Theme.iconSize - Theme.spacingS
+
+                    StyledText {
+                        width: parent.width
+                        text: I18n.tr("Sign-in Required", "captive portal network action")
+                        color: Theme.surfaceText
+                        font.pixelSize: Theme.fontSizeMedium
+                        elide: Text.ElideRight
+                    }
+
+                    StyledText {
+                        width: parent.width
+                        text: NetworkService.portalSSID.length > 0 ? I18n.tr("Connect to %1 to access the internet.", "captive portal network status, %1 is the Wi-Fi network name").arg(NetworkService.portalSSID) : I18n.tr("Open the network login page to access the internet.", "captive portal network status when the network name is unavailable")
+                        color: Theme.warning
+                        font.pixelSize: Theme.fontSizeSmall
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+
+            DankIcon {
+                id: portalChevron
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.spacingM
+                anchors.verticalCenter: parent.verticalCenter
+                name: "chevron_right"
+                size: 20
+                color: Theme.warning
+            }
+
+            MouseArea {
+                id: portalMouseArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: NetworkService.openCaptivePortal()
+            }
+        }
+    }
+
+    Item {
+        id: wifiScanningOverlay
+        anchors.top: portalRow.visible ? portalRow.bottom : (hotspotRow.visible ? hotspotRow.bottom : headerRow.bottom)
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: Theme.spacingM
-        anchors.topMargin: hotspotRow.visible ? Theme.spacingS : Theme.spacingM
+        anchors.topMargin: portalRow.visible || hotspotRow.visible ? Theme.spacingS : Theme.spacingM
         visible: currentConnectionType === "wifi" && NetworkService.wifiEnabled && !NetworkService.wifiToggling && NetworkService.wifiInterface && (NetworkService.wifiNetworks?.length ?? 0) < 1 && NetworkService.isScanning
 
         DankIcon {
@@ -1069,12 +1143,12 @@ Rectangle {
 
     DankListView {
         id: wifiContent
-        anchors.top: hotspotRow.visible ? hotspotRow.bottom : headerRow.bottom
+        anchors.top: portalRow.visible ? portalRow.bottom : (hotspotRow.visible ? hotspotRow.bottom : headerRow.bottom)
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: Theme.spacingM
-        anchors.topMargin: hotspotRow.visible ? Theme.spacingS : Theme.spacingM
+        anchors.topMargin: portalRow.visible || hotspotRow.visible ? Theme.spacingS : Theme.spacingM
         visible: currentConnectionType === "wifi" && NetworkService.wifiEnabled && !NetworkService.wifiToggling && !wifiScanningOverlay.visible
         clip: true
         spacing: Theme.spacingS

@@ -1,10 +1,12 @@
 package network
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/AvengeMedia/DankMaterialShell/core/internal/notify"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -82,6 +84,111 @@ func TestStateChangedMeaningfully_HotspotFields(t *testing.T) {
 			assert.True(t, stateChangedMeaningfully(&tt.old, &tt.new))
 		})
 	}
+}
+
+func TestStateChangedMeaningfully_Connectivity(t *testing.T) {
+	assert.True(t, stateChangedMeaningfully(
+		&NetworkState{ConnectivityState: 4, IsPortal: false},
+		&NetworkState{ConnectivityState: 2, IsPortal: true},
+	))
+}
+
+func TestManager_CaptivePortalNotificationLifecycle(t *testing.T) {
+	origSend := sendActionableNotification
+	origClose := closeNotification
+	origUnwatch := unwatchAction
+	t.Cleanup(func() {
+		sendActionableNotification = origSend
+		closeNotification = origClose
+		unwatchAction = origUnwatch
+	})
+
+	var sent []notify.Notification
+	var unwatched []uint32
+	var closed []uint32
+	sendActionableNotification = func(n notify.Notification) (uint32, error) {
+		sent = append(sent, n)
+		return 42, nil
+	}
+	closeNotification = func(id uint32) error {
+		closed = append(closed, id)
+		return nil
+	}
+	unwatchAction = func(id uint32) {
+		unwatched = append(unwatched, id)
+	}
+
+	m := &Manager{state: &NetworkState{IsPortal: true}, stateMutex: sync.RWMutex{}}
+	assert.NoError(t, m.ShowCaptivePortalNotification("title", "localized safe body", "action"))
+	assert.NoError(t, m.ShowCaptivePortalNotification("title", "localized safe body", "action"))
+
+	assert.Len(t, sent, 1)
+	assert.Equal(t, "title", sent[0].Summary)
+	assert.Equal(t, "localized safe body", sent[0].Body)
+	assert.Equal(t, "action", sent[0].OpenLabel)
+	assert.Equal(t, portalProbeURL, sent[0].ActionTarget)
+
+	m.DismissCaptivePortalNotification()
+	m.DismissCaptivePortalNotification()
+	assert.Equal(t, []uint32{42}, closed)
+	assert.Equal(t, []uint32{42}, unwatched)
+}
+
+func TestManager_CaptivePortalNotificationIgnoredOutsidePortal(t *testing.T) {
+	origSend := sendActionableNotification
+	t.Cleanup(func() { sendActionableNotification = origSend })
+
+	called := false
+	sendActionableNotification = func(n notify.Notification) (uint32, error) {
+		called = true
+		return 1, nil
+	}
+
+	m := &Manager{state: &NetworkState{IsPortal: false}, stateMutex: sync.RWMutex{}}
+	assert.NoError(t, m.ShowCaptivePortalNotification("title", "body", "action"))
+	assert.False(t, called)
+}
+
+func TestManager_CaptivePortalNotificationSendFailureCanRetry(t *testing.T) {
+	origSend := sendActionableNotification
+	t.Cleanup(func() { sendActionableNotification = origSend })
+
+	calls := 0
+	sendActionableNotification = func(n notify.Notification) (uint32, error) {
+		calls++
+		if calls == 1 {
+			return 0, errors.New("dbus unavailable")
+		}
+		return 77, nil
+	}
+
+	m := &Manager{state: &NetworkState{IsPortal: true}, stateMutex: sync.RWMutex{}}
+	assert.Error(t, m.ShowCaptivePortalNotification("title", "body", "action"))
+	assert.NoError(t, m.ShowCaptivePortalNotification("title", "body", "action"))
+	assert.Equal(t, 2, calls)
+	assert.Equal(t, uint32(77), m.portalNotificationID)
+}
+
+func TestManager_CaptivePortalNotificationSanitizesLocalizedText(t *testing.T) {
+	origSend := sendActionableNotification
+	t.Cleanup(func() { sendActionableNotification = origSend })
+
+	var sent notify.Notification
+	sendActionableNotification = func(n notify.Notification) (uint32, error) {
+		sent = n
+		return 9, nil
+	}
+
+	m := &Manager{state: &NetworkState{IsPortal: true}, stateMutex: sync.RWMutex{}}
+	assert.NoError(t, m.ShowCaptivePortalNotification("<b>登录</b>\x1b", "[click](http://evil.test)\x00 *网络*", "Log_In"))
+	assert.NotContains(t, sent.Summary, "<")
+	assert.NotContains(t, sent.Summary, ">")
+	assert.NotContains(t, sent.Body, "[click](http://evil.test)")
+	assert.NotContains(t, sent.Body, "*")
+	assert.NotContains(t, sent.OpenLabel, "_")
+	assert.NotContains(t, sent.Summary, "\x1b")
+	assert.NotContains(t, sent.Body, "\x00")
+	assert.Contains(t, sent.Summary, "登录")
 }
 
 func TestStateChangedMeaningfully_WiFiDeviceFields(t *testing.T) {

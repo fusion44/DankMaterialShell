@@ -15,6 +15,8 @@ Singleton {
 
     property string networkStatus: "disconnected"
     property string primaryConnection: ""
+    property int connectivityState: 0
+    property bool isPortal: false
 
     property string ethernetIP: ""
     property string ethernetInterface: ""
@@ -81,6 +83,7 @@ Singleton {
     property var savedWifiNetworks: []
     readonly property int savedWifiStateApiVersion: 26
     readonly property int hotspotApiVersion: 28
+    readonly property int captivePortalNotificationApiVersion: 35
     property bool backendHotspotSupported: false
     property bool backendHotspotAvailable: false
     property bool backendHotspotConfigured: false
@@ -107,6 +110,9 @@ Singleton {
     property string lastConnectionError: ""
     property bool passwordDialogShouldReopen: false
     property bool autoRefreshEnabled: false
+    property bool captivePortalNotificationShown: false
+    property bool captivePortalNotificationPending: false
+    property int captivePortalNotificationRequest: 0
     property string wifiPassword: ""
     property string forgetSSID: ""
 
@@ -240,9 +246,13 @@ Singleton {
         target: DMSService
 
         function onConnectionStateChanged() {
-            if (DMSService.isConnected) {
-                checkDMSCapabilities();
+            if (!DMSService.isConnected) {
+                captivePortalNotificationRequest++;
+                captivePortalNotificationPending = false;
+                captivePortalNotificationShown = false;
+                return;
             }
+            checkDMSCapabilities();
         }
     }
 
@@ -331,6 +341,9 @@ Singleton {
         vpnAvailable = networkAvailable && backend === "networkmanager";
         networkStatus = state.networkStatus || "disconnected";
         primaryConnection = state.primaryConnection || "";
+        connectivityState = state.connectivityState || 0;
+        const previousIsPortal = isPortal;
+        isPortal = state.isPortal === true;
 
         ethernetIP = state.ethernetIP || "";
         ethernetInterface = state.ethernetDevice || "";
@@ -398,6 +411,8 @@ Singleton {
 
         currentWifiSSID = state.wifiSSID || "";
         wifiSignalStrength = state.wifiSignal || 0;
+
+        updateCaptivePortalNotification(previousIsPortal);
 
         if (state.wifiNetworks) {
             wifiNetworks = state.wifiNetworks;
@@ -514,6 +529,88 @@ Singleton {
         wasConnecting = isConnecting;
 
         connectionChanged();
+    }
+
+    function captivePortalSupported() {
+        return networkAvailable && DMSService.isConnected && DMSService.apiVersion >= captivePortalNotificationApiVersion;
+    }
+
+    function updateCaptivePortalNotification(previousIsPortal) {
+        if (!captivePortalSupported()) {
+            captivePortalNotificationPending = false;
+            captivePortalNotificationShown = false;
+            return;
+        }
+        if (!isPortal) {
+            dismissCaptivePortalNotification();
+            return;
+        }
+        if (previousIsPortal && (captivePortalNotificationShown || captivePortalNotificationPending))
+            return;
+        showCaptivePortalNotification();
+    }
+
+    function showCaptivePortalNotification() {
+        if (!captivePortalSupported() || !isPortal || captivePortalNotificationShown || captivePortalNotificationPending)
+            return;
+
+        const request = ++captivePortalNotificationRequest;
+        captivePortalNotificationPending = true;
+        const ssid = plainDisplayText(currentWifiSSID);
+        const body = ssid.length > 0 ? I18n.tr("Connect to %1 to access the internet.", "captive portal notification body, %1 is the Wi-Fi network name").arg(ssid) : I18n.tr("Open the network login page to access the internet.", "captive portal notification body when the network name is unavailable");
+        DMSService.sendRequest("network.captivePortal.show", {
+            summary: I18n.tr("Wi-Fi Login Required", "captive portal notification title"),
+            body: body,
+            actionLabel: I18n.tr("Log In", "captive portal notification action")
+        }, response => {
+            if (request !== captivePortalNotificationRequest)
+                return;
+            captivePortalNotificationPending = false;
+            if (response.result && captivePortalSupported() && isPortal)
+                captivePortalNotificationShown = true;
+        });
+    }
+
+    function plainDisplayText(text) {
+        return String(text || "").replace(/[<>&\[\]()*_`~#:\\]/g, character => {
+            if (character === "<")
+                return "‹";
+            if (character === ">")
+                return "›";
+            if (character === "&")
+                return "＆";
+            if (character === "[")
+                return "［";
+            if (character === "]")
+                return "］";
+            if (character === "(")
+                return "（";
+            if (character === ")")
+                return "）";
+            if (character === "*")
+                return "＊";
+            if (character === "_")
+                return "＿";
+            if (character === "`")
+                return "｀";
+            if (character === "~")
+                return "～";
+            if (character === "#")
+                return "＃";
+            if (character === ":")
+                return "꞉";
+            return "＼";
+        }).replace(/[\u0000-\u001f\u007f-\u009f]/g, " ");
+    }
+
+    function dismissCaptivePortalNotification() {
+        const shouldDismiss = captivePortalNotificationShown || captivePortalNotificationPending;
+        captivePortalNotificationRequest++;
+        captivePortalNotificationPending = false;
+        captivePortalNotificationShown = false;
+        if (!captivePortalSupported() || !shouldDismiss)
+            return;
+        DMSService.sendRequest("network.captivePortal.dismiss", null, null);
     }
 
     function connectToSpecificWiredConfig(uuid) {

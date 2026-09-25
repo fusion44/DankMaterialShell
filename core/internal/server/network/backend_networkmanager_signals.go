@@ -341,7 +341,6 @@ func (b *NetworkManagerBackend) handleDBusSignal(sig *dbus.Signal) {
 
 func (b *NetworkManagerBackend) handleNetworkManagerChange(changes map[string]dbus.Variant) {
 	var needsUpdate bool
-
 	for key := range changes {
 		switch key {
 		case "PrimaryConnection", "State", "ActiveConnections":
@@ -358,6 +357,13 @@ func (b *NetworkManagerBackend) handleNetworkManagerChange(changes map[string]db
 			b.updateCellularRadioState()
 			b.updateAllCellularDevices()
 			b.updateCellularState()
+			needsUpdate = true
+		case "Connectivity":
+			connectivity, ok := changes[key].Value().(uint32)
+			if !ok {
+				continue
+			}
+			b.setConnectivityState(connectivity)
 			needsUpdate = true
 		default:
 			continue
@@ -380,6 +386,7 @@ func (b *NetworkManagerBackend) handleNetworkManagerChange(changes map[string]db
 			b.onStateChange()
 		}
 	}
+
 }
 
 func (b *NetworkManagerBackend) handleActiveConnectionStateChange() {

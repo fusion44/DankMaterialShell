@@ -67,6 +67,10 @@ func HandleRequest(conn *models.Conn, req models.Request, manager *Manager) {
 		handleCredentialsSubmit(conn, req, manager)
 	case "network.credentials.cancel":
 		handleCredentialsCancel(conn, req, manager)
+	case "network.captivePortal.show":
+		handleCaptivePortalShow(conn, req, manager)
+	case "network.captivePortal.dismiss":
+		handleCaptivePortalDismiss(conn, req, manager)
 	case "network.vpn.profiles":
 		handleListVPNProfiles(conn, req, manager)
 	case "network.vpn.active":
@@ -104,6 +108,34 @@ func HandleRequest(conn *models.Conn, req models.Request, manager *Manager) {
 	default:
 		models.RespondError(conn, req.ID, fmt.Sprintf("unknown method: %s", req.Method))
 	}
+}
+
+func handleCaptivePortalShow(conn *models.Conn, req models.Request, manager *Manager) {
+	summary, err := params.String(req.Params, "summary")
+	if err != nil {
+		models.RespondError(conn, req.ID, err.Error())
+		return
+	}
+	body, err := params.String(req.Params, "body")
+	if err != nil {
+		models.RespondError(conn, req.ID, err.Error())
+		return
+	}
+	actionLabel, err := params.String(req.Params, "actionLabel")
+	if err != nil {
+		models.RespondError(conn, req.ID, err.Error())
+		return
+	}
+	if err := manager.ShowCaptivePortalNotification(summary, body, actionLabel); err != nil {
+		models.RespondError(conn, req.ID, err.Error())
+		return
+	}
+	models.Respond(conn, req.ID, models.SuccessResult{Success: true, Message: "notification shown"})
+}
+
+func handleCaptivePortalDismiss(conn *models.Conn, req models.Request, manager *Manager) {
+	manager.DismissCaptivePortalNotification()
+	models.Respond(conn, req.ID, models.SuccessResult{Success: true, Message: "notification dismissed"})
 }
 
 func handleCredentialsSubmit(conn *models.Conn, req models.Request, manager *Manager) {

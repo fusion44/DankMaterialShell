@@ -111,6 +111,8 @@ type VPNState struct {
 type NetworkState struct {
 	Backend                 string               `json:"backend"`
 	NetworkStatus           NetworkStatus        `json:"networkStatus"`
+	ConnectivityState       uint32               `json:"connectivityState"`
+	IsPortal                bool                 `json:"isPortal"`
 	Preference              ConnectionPreference `json:"preference"`
 	EthernetIP              string               `json:"ethernetIP"`
 	EthernetDevice          string               `json:"ethernetDevice"`
@@ -203,6 +205,8 @@ type Manager struct {
 	notifierWg            sync.WaitGroup
 	lastNotifiedState     *NetworkState
 	credentialSubscribers syncmap.Map[string, chan CredentialPrompt]
+	portalNotificationMu  sync.Mutex
+	portalNotificationID  uint32
 }
 
 type EventType string

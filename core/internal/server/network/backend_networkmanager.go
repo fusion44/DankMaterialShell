@@ -317,6 +317,10 @@ func (b *NetworkManagerBackend) Initialize() error {
 		return err
 	}
 
+	if connectivity, err := nm.GetPropertyConnectivity(); err == nil {
+		b.setConnectivityState(uint32(connectivity))
+	}
+
 	if _, err := b.ListVPNProfiles(); err != nil {
 		log.Warnf("Failed to get initial VPN profiles: %v", err)
 	}
@@ -324,8 +328,18 @@ func (b *NetworkManagerBackend) Initialize() error {
 	if _, err := b.ListActiveVPN(); err != nil {
 		log.Warnf("Failed to get initial active VPNs: %v", err)
 	}
-
 	return nil
+}
+
+const (
+	nmConnectivityPortal = 2
+)
+
+func (b *NetworkManagerBackend) setConnectivityState(connectivity uint32) {
+	b.stateMutex.Lock()
+	b.state.ConnectivityState = connectivity
+	b.state.IsPortal = connectivity == nmConnectivityPortal
+	b.stateMutex.Unlock()
 }
 
 func (b *NetworkManagerBackend) ethernetDevicesSnapshot() map[string]*ethernetDeviceInfo {

@@ -71,6 +71,8 @@ type HotspotBackend interface {
 type BackendState struct {
 	Backend                 string
 	NetworkStatus           NetworkStatus
+	ConnectivityState       uint32
+	IsPortal                bool
 	EthernetIP              string
 	EthernetDevice          string
 	EthernetConnected       bool

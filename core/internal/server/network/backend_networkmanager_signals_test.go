@@ -156,6 +156,45 @@ func TestNetworkManagerBackend_HandleNetworkManagerChange_ActiveConnections(t *t
 	})
 }
 
+func TestNetworkManagerBackend_HandleNetworkManagerChange_ConnectivityTransitions(t *testing.T) {
+	tests := []struct {
+		name       string
+		initial    uint32
+		change     uint32
+		wantPortal bool
+	}{
+		{name: "full to portal", initial: 4, change: nmConnectivityPortal, wantPortal: true},
+		{name: "repeated portal", initial: nmConnectivityPortal, change: nmConnectivityPortal, wantPortal: true},
+		{name: "portal to full", initial: nmConnectivityPortal, change: 4, wantPortal: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockNM := mock_gonetworkmanager.NewMockNetworkManager(t)
+			backend, err := NewNetworkManagerBackend(mockNM)
+			assert.NoError(t, err)
+			backend.state.ConnectivityState = tt.initial
+			backend.state.IsPortal = tt.initial == nmConnectivityPortal
+
+			mockNM.EXPECT().GetPropertyActiveConnections().Return([]gonetworkmanager.ActiveConnection{}, nil).Maybe()
+			mockNM.EXPECT().GetPropertyPrimaryConnection().Return(nil, nil).Maybe()
+
+			stateChangeCalls := 0
+			backend.onStateChange = func() { stateChangeCalls++ }
+
+			backend.handleNetworkManagerChange(map[string]dbus.Variant{
+				"Connectivity": dbus.MakeVariant(tt.change),
+			})
+
+			backend.stateMutex.RLock()
+			assert.Equal(t, tt.change, backend.state.ConnectivityState)
+			assert.Equal(t, tt.wantPortal, backend.state.IsPortal)
+			backend.stateMutex.RUnlock()
+			assert.Equal(t, 1, stateChangeCalls)
+		})
+	}
+}
+
 func TestNetworkManagerBackend_HandleDeviceChange(t *testing.T) {
 	mockNM := mock_gonetworkmanager.NewMockNetworkManager(t)
 

@@ -24,6 +24,9 @@ func handleWatchAction(conn *models.Conn, req models.Request, manager *Manager) 
 		models.RespondError(conn, req.ID, "invalid path parameter")
 		return
 	}
-	manager.Watch(uint32(id), path)
+	if err := manager.Watch(uint32(id), path); err != nil {
+		models.RespondError(conn, req.ID, err.Error())
+		return
+	}
 	models.Respond(conn, req.ID, "ok")
 }

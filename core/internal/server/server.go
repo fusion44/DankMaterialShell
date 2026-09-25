@@ -38,7 +38,7 @@ import (
 	"github.com/AvengeMedia/dankgo/syncmap"
 )
 
-const APIVersion = 34
+const APIVersion = 35
 
 var CLIVersion = "dev"
 

@@ -132,6 +132,8 @@ func (m *Manager) syncStateFromBackend() error {
 	m.stateMutex.Lock()
 	m.state.Backend = backendState.Backend
 	m.state.NetworkStatus = backendState.NetworkStatus
+	m.state.ConnectivityState = backendState.ConnectivityState
+	m.state.IsPortal = backendState.IsPortal
 	m.state.EthernetIP = backendState.EthernetIP
 	m.state.EthernetDevice = backendState.EthernetDevice
 	m.state.EthernetConnected = backendState.EthernetConnected
@@ -195,6 +197,14 @@ func (m *Manager) onBackendStateChange() {
 	if err := m.syncStateFromBackend(); err != nil {
 		log.Errorf("failed to sync state from backend: %v", err)
 	}
+	m.stateMutex.RLock()
+	isPortal := m.state.IsPortal
+	m.stateMutex.RUnlock()
+	if !isPortal {
+		if id := m.takeCaptivePortalNotification(); id != 0 {
+			go m.closeCaptivePortalNotification(id)
+		}
+	}
 	m.notifySubscribers()
 }
 
@@ -227,6 +237,9 @@ func (m *Manager) snapshotState() NetworkState {
 
 func stateChangedMeaningfully(old, new *NetworkState) bool {
 	if old.NetworkStatus != new.NetworkStatus {
+		return true
+	}
+	if old.ConnectivityState != new.ConnectivityState || old.IsPortal != new.IsPortal {
 		return true
 	}
 	if old.Preference != new.Preference {
@@ -575,6 +588,7 @@ func (m *Manager) GetPromptBroker() PromptBroker {
 }
 
 func (m *Manager) Close() {
+	m.DismissCaptivePortalNotification()
 	close(m.stopChan)
 	m.notifierWg.Wait()
 
