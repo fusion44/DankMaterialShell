@@ -126,7 +126,7 @@ func TestManager_CaptivePortalNotificationLifecycle(t *testing.T) {
 	assert.Equal(t, "title", sent[0].Summary)
 	assert.Equal(t, "localized safe body", sent[0].Body)
 	assert.Equal(t, "action", sent[0].OpenLabel)
-	assert.Equal(t, portalProbeURL, sent[0].ActionTarget)
+	assert.Equal(t, portalLoginURL, sent[0].ActionTarget)
 
 	m.DismissCaptivePortalNotification()
 	m.DismissCaptivePortalNotification()

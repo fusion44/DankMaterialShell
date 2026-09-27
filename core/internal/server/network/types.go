@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"sync"
 
 	"github.com/AvengeMedia/dankgo/syncmap"
@@ -207,6 +208,13 @@ type Manager struct {
 	credentialSubscribers syncmap.Map[string, chan CredentialPrompt]
 	portalNotificationMu  sync.Mutex
 	portalNotificationID  uint32
+	portalProbeMu         sync.Mutex
+	portalProbeKey        string
+	portalProbeCompleted  bool
+	portalProbeRunning    bool
+	portalProbeDetected   bool
+	portalProbeContext    context.Context
+	portalProbeCancel     context.CancelFunc
 }
 
 type EventType string

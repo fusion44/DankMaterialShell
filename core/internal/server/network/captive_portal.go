@@ -9,7 +9,7 @@ import (
 	"github.com/AvengeMedia/DankMaterialShell/core/internal/notify"
 )
 
-const portalProbeURL = "http://neverssl.com"
+const portalLoginURL = "http://neverssl.com"
 
 var (
 	sendActionableNotification = notify.SendActionable
@@ -48,7 +48,7 @@ func (m *Manager) ShowCaptivePortalNotification(summary, body, actionLabel strin
 		Summary:      summary,
 		Body:         body,
 		Icon:         "network-wireless",
-		ActionTarget: portalProbeURL,
+		ActionTarget: portalLoginURL,
 		OpenLabel:    actionLabel,
 		Persistent:   true,
 	})

@@ -333,6 +333,7 @@ func (b *NetworkManagerBackend) Initialize() error {
 
 const (
 	nmConnectivityPortal = 2
+	nmConnectivityFull   = 4
 )
 
 func (b *NetworkManagerBackend) setConnectivityState(connectivity uint32) {

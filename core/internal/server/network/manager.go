@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -78,6 +79,7 @@ func NewManager() (*Manager, error) {
 		return nil, fmt.Errorf("%w: %s", ErrNoNetworkBackend, detection.ChosenReason)
 	}
 
+	portalProbeContext, portalProbeCancel := context.WithCancel(context.Background())
 	m := &Manager{
 		backend: backend,
 		state: &NetworkState{
@@ -91,6 +93,9 @@ func NewManager() (*Manager, error) {
 
 		stopChan: make(chan struct{}),
 		dirty:    make(chan struct{}, 1),
+
+		portalProbeContext: portalProbeContext,
+		portalProbeCancel:  portalProbeCancel,
 	}
 
 	broker := NewSubscriptionBroker(m.broadcastCredentialPrompt)
@@ -128,12 +133,13 @@ func (m *Manager) syncStateFromBackend() error {
 		return err
 	}
 	_, hotspotSupported := m.hotspotBackend()
+	portalDetected, shouldProbePortal := m.preparePortalProbe(backendState)
 
 	m.stateMutex.Lock()
 	m.state.Backend = backendState.Backend
 	m.state.NetworkStatus = backendState.NetworkStatus
 	m.state.ConnectivityState = backendState.ConnectivityState
-	m.state.IsPortal = backendState.IsPortal
+	m.state.IsPortal = backendState.IsPortal || portalDetected
 	m.state.EthernetIP = backendState.EthernetIP
 	m.state.EthernetDevice = backendState.EthernetDevice
 	m.state.EthernetConnected = backendState.EthernetConnected
@@ -189,6 +195,9 @@ func (m *Manager) syncStateFromBackend() error {
 	m.state.VPNError = backendState.VPNError
 	m.state.VPNErrorUuid = backendState.VPNErrorUuid
 	m.stateMutex.Unlock()
+	if shouldProbePortal {
+		go m.runPortalProbe(portalProbeConnectionKey(backendState))
+	}
 
 	return nil
 }
@@ -589,6 +598,9 @@ func (m *Manager) GetPromptBroker() PromptBroker {
 
 func (m *Manager) Close() {
 	m.DismissCaptivePortalNotification()
+	if m.portalProbeCancel != nil {
+		m.portalProbeCancel()
+	}
 	close(m.stopChan)
 	m.notifierWg.Wait()
 
